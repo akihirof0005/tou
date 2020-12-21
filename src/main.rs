@@ -6,49 +6,55 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-//座標
 #[derive(Debug)]
+///座標を代表する
 struct Point3d {
     x: f64,
     y: f64,
     z: f64,
 }
-//Atom
+
 #[derive(Debug)]
+///分子中の原子を記述する、シンボル、添字、座標、結合先のAtomの添字の配列を格納する
 struct Atom {
     index: u32,
-    cordinate: Point3d,
+    coordinate: Point3d,
     symbol: String,
-    links: Vec<String>,
+    links: Vec<i32>,
 }
-//外積
+
+///座標を位置ベクトルと捉えた場合の外積を計算するメソッド
 fn veprod(v1: &Point3d, v2: &Point3d) -> Point3d {
     let x: f64 = v1.y * v2.z - v2.y * v1.z;
     let y: f64 = v1.z * v2.x - v2.z * v1.x;
     let z: f64 = v1.x * v2.y - v2.x * v1.y;
     return Point3d { x: x, y: y, z: z };
 }
-//内積
+
+///座標を位置ベクトルと捉えた場合の内積を計算するメソッド
 fn scprod(v1: &Point3d, v2: &Point3d) -> f64 {
     let ret: f64 = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
     return ret;
 }
-//差（座標をベクトルにする）
+
+///座標を位置ベクトルと捉えた場合の差を計算するメソッド
 fn sub(p1: &Point3d, p2: &Point3d) -> Point3d {
     let x: f64 = p2.x - p1.x;
     let y: f64 = p2.y - p1.y;
     let z: f64 = p2.z - p1.z;
     return Point3d { x: x, y: y, z: z };
 }
-//文字列から文字数分取り出す
+
+///Stringから文字数分取り出す
 fn kiridashi(text: String, start: usize, end: usize) -> String {
     let begin = text.char_indices().nth(start).unwrap().0;
     let end = text.char_indices().nth(end).unwrap().0;
     let ret = &text[begin..end];
     return ret.trim().to_owned();
 }
-//
-fn tou_reader(path: String) -> Vec<String> {
+
+///PDBファイルからVec<Atom>に読み込む
+fn tou_reader(path: String) -> Vec<Atom> {
     let path = Path::new(&path);
     let display = path.display();
 
@@ -79,15 +85,16 @@ fn tou_reader(path: String) -> Vec<String> {
             for item in items {
                 links.push(item.parse().unwrap());
             }
-            let index: usize = links.get(0) as usize;
+            let index: usize = (links[0] - 1) as usize;
+            links.remove(0);
             atoms[index].links = links;
-            println!("{:?}", items);
+            //           println!("{:?}", items);
             continue;
         }
         if "HET" == rec {
             //println!("{:?}", items);
             let num: u32 = items[1].parse().unwrap();
-            let cord: Point3d = Point3d {
+            let coord: Point3d = Point3d {
                 x: items[5].parse().unwrap(),
                 y: items[6].parse().unwrap(),
                 z: items[7].parse().unwrap(),
@@ -95,19 +102,133 @@ fn tou_reader(path: String) -> Vec<String> {
             atoms.push(Atom {
                 index: num,
                 symbol: items[2].to_string(),
-                cordinate: cord,
+                coordinate: coord,
                 links: Vec::new(),
             })
         } else {
-            println!("{}", s);
+            //println!("{}", s);
             //continue;
         }
     }
     //println!("{:?}", atoms);
-    return list;
+    return atoms;
+}
+
+///Vec<Atom>から-NH2(アミン基)をカウントする
+fn is_included_nh2(tou: &Vec<Atom>) -> i32 {
+    let mut ret: i32 = 0;
+    for atom in tou {
+        if atom.symbol == "N" && atom.links.len() == 3 {
+            if (tou[(atom.links[0] - 1) as usize].symbol == "C"
+                && tou[(atom.links[1] - 1) as usize].symbol == "H"
+                && tou[(atom.links[2] - 1) as usize].symbol == "H")
+                || (tou[(atom.links[0] - 1) as usize].symbol == "H"
+                    && tou[(atom.links[1] - 1) as usize].symbol == "C"
+                    && tou[(atom.links[2] - 1) as usize].symbol == "H")
+                || (tou[(atom.links[0] - 1) as usize].symbol == "H"
+                    && tou[(atom.links[1] - 1) as usize].symbol == "H"
+                    && tou[(atom.links[2] - 1) as usize].symbol == "C")
+            {
+                ret += 1;
+            }
+        }
+    }
+    return ret;
+}
+
+///Vec<Atom>から-OH(水酸基)をカウントする
+fn is_included_oh(tou: &Vec<Atom>) -> i32 {
+    let mut ret: i32 = 0;
+    for atom in tou {
+        if atom.symbol == "O" && atom.links.len() == 2 {
+            if (tou[(atom.links[0] - 1) as usize].symbol == "C"
+                && tou[(atom.links[1] - 1) as usize].symbol == "H")
+                || (tou[(atom.links[0] - 1) as usize].symbol == "H"
+                    && tou[(atom.links[1] - 1) as usize].symbol == "C")
+            {
+                ret += 1;
+            }
+        }
+    }
+    return ret;
+}
+
+///Vec<Atom>から-COOH(カルボン酸)をカウントする
+fn is_included_cooh(tou: &Vec<Atom>) -> i32 {
+    let mut ret: i32 = 0;
+    for atom in tou {
+        if atom.symbol == "O"
+            && atom.links.len() == 1
+            && tou[(atom.links[0] - 1) as usize].symbol == "C"
+        {
+            let carbon: &Atom = &tou[(atom.links[0] - 1) as usize];
+            if carbon.links.len() == 3 {
+                if (tou[(carbon.links[0] - 1) as usize].symbol == "C"
+                    && tou[(carbon.links[1] - 1) as usize].symbol == "O"
+                    && tou[(carbon.links[2] - 1) as usize].symbol == "O")
+                    || (tou[(carbon.links[0] - 1) as usize].symbol == "O"
+                        && tou[(carbon.links[1] - 1) as usize].symbol == "C"
+                        && tou[(carbon.links[2] - 1) as usize].symbol == "O")
+                    || (tou[(carbon.links[0] - 1) as usize].symbol == "O"
+                        && tou[(carbon.links[1] - 1) as usize].symbol == "O"
+                        && tou[(carbon.links[2] - 1) as usize].symbol == "C")
+                {
+                    ret += 1;
+                }
+            }
+        }
+    }
+    return ret;
+}
+
+///Vec<Atom>から-NOCH3(Nアセチル)をカウントする
+fn is_included_noc(tou: &Vec<Atom>) -> i32 {
+    let mut ret: i32 = 0;
+    for atom in tou {
+        if atom.symbol == "O"
+            && atom.links.len() == 1
+            && tou[(atom.links[0] - 1) as usize].symbol == "C"
+        {
+            let carbon: &Atom = &tou[(atom.links[0] - 1) as usize];
+            if carbon.links.len() == 3 {
+                if (tou[(carbon.links[0] - 1) as usize].symbol == "C"
+                    && tou[(carbon.links[1] - 1) as usize].symbol == "N"
+                    && tou[(carbon.links[2] - 1) as usize].symbol == "O")
+                    || (tou[(carbon.links[0] - 1) as usize].symbol == "C"
+                        && tou[(carbon.links[1] - 1) as usize].symbol == "O"
+                        && tou[(carbon.links[2] - 1) as usize].symbol == "N")
+                    || (tou[(carbon.links[0] - 1) as usize].symbol == "N"
+                        && tou[(carbon.links[1] - 1) as usize].symbol == "C"
+                        && tou[(carbon.links[2] - 1) as usize].symbol == "O")
+                    || (tou[(carbon.links[0] - 1) as usize].symbol == "N"
+                        && tou[(carbon.links[1] - 1) as usize].symbol == "O"
+                        && tou[(carbon.links[2] - 1) as usize].symbol == "C")
+                    || (tou[(carbon.links[0] - 1) as usize].symbol == "O"
+                        && tou[(carbon.links[1] - 1) as usize].symbol == "N"
+                        && tou[(carbon.links[2] - 1) as usize].symbol == "C")
+                    || (tou[(carbon.links[0] - 1) as usize].symbol == "O"
+                        && tou[(carbon.links[1] - 1) as usize].symbol == "C"
+                        && tou[(carbon.links[2] - 1) as usize].symbol == "N")
+                {
+                    ret += 1;
+                }
+            }
+        }
+    }
+    return ret;
 }
 
 fn main() {
-    let path = format!("{}", "/home/skit/src/akihirof0005/tou/a-D-Manp.pdb");
-    let list = tou_reader(path);
+    let args: Vec<String> = env::args().collect();
+    let filename = &args[1];
+    let tou: Vec<Atom> = tou_reader(filename.to_string());
+
+    let oh_count = is_included_oh(&tou);
+    let cooh_count = is_included_cooh(&tou);
+    let noc_count = is_included_noc(&tou);
+    let nh2_count = is_included_nh2(&tou);
+    println!(
+        "OH:{:?} COOH:{:?} NOC:{:?} NH2:{:?}",
+        oh_count, cooh_count, noc_count, nh2_count
+    );
 }
