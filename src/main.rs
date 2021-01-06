@@ -3,6 +3,7 @@ extern crate tou;
 mod finding_partial_structures;
 mod manipulate_vectors;
 mod manipulation;
+
 mod structs;
 
 use std::env;
