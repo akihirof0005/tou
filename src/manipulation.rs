@@ -9,13 +9,14 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-///Stringから文字数分取り出す
-pub fn kiridashi(text: String, start: usize, end: usize) -> String {
-    let begin = text.char_indices().nth(start).unwrap().0;
-    let end = text.char_indices().nth(end).unwrap().0;
-    let ret = &text[begin..end];
-    return ret.trim().to_owned();
-}
+//Stringから文字数分取り出す
+//pub fn kiridashi(text: String, start: usize, end: usize) -> String {
+//    return text.chars().skip(start).take(end).collect::<String>();
+//let begin = text.char_indices().nth(start).unwrap().0;
+//let end = text.char_indices().nth(end).unwrap().0;
+//let ret = &text[begin..end];
+//return ret.trim().to_owned();
+//}
 
 ///PDBファイルからVec<Atom>に読み込む
 pub fn tou_reader(path: String) -> Vec<Atom> {
@@ -39,7 +40,7 @@ pub fn tou_reader(path: String) -> Vec<Atom> {
             continue;
         }
         let mut items: Vec<&str> = s.split_whitespace().collect();
-        let rec: String = kiridashi(s.to_string(), 0, 3);
+        let rec: String = s.chars().skip(0).take(3).collect::<String>();
 
         if "CON" == rec {
             //list.push(s);

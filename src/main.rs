@@ -8,7 +8,9 @@ mod structs;
 
 //use std::env;
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs;
+use std::path::Path;
 
 use rustc_serialize::json;
 
@@ -20,7 +22,7 @@ fn main() {
     }
 
     //   let args: Vec<String> = env::args().collect();
-    let mut result: Vec<HashMap<&str, i32>> = vec![];
+    let mut result: HashMap<String, HashMap<&str, i32>> = HashMap::new();
     for file in files.iter() {
         let filename = &file;
         let tou: Vec<structs::Atom> = manipulation::tou_reader(filename.to_string());
@@ -34,7 +36,10 @@ fn main() {
         tou.insert("COOH", cooh_count);
         tou.insert("NOC", noc_count);
         tou.insert("NH2", nh2_count);
-        result.push(tou);
+
+        let name: &OsStr = Path::new(&file).file_stem().unwrap();
+        let name: String = Path::new(name).display().to_string();
+        result.insert(name, tou);
     }
     println!("{}", json::encode(&result).unwrap());
 }

@@ -1,6 +1,7 @@
-files="./pdb/*"
-for filepath in $files; do
-  echo $filepath
-  ./target/release/tou $filepath
-done
+cargo build --release
+if [ -d "./pdb" ]; then
+  ./target/release/tou
+else
+  echo "Dependency file not found..."
+fi
 
